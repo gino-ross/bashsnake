@@ -18,7 +18,9 @@ game_over=0
 # score=0
 x=10
 y=10
-frametime=0.5
+requested_dir="right"
+current_dir="right"
+frametime=0.1
 
 printf "\e[?25l" # Hide cursor
 clear
@@ -26,23 +28,40 @@ clear
 while [ $game_over == 0 ]; do
 
     # input handling
-    if IFS= read -rn 1 -t "$frametime" key; then
-        if [[ $key == $'\e' ]]; then #
-            IFS= read -rn 2 rest
+    key=""
+    while IFS= read -t 0.01 -rn 1 key; do
+        if [[ $key == $'\e' ]]; then
+            rest=""
+            IFS= read -t 0.01 -rn 2 rest
             key+="$rest"
         fi
 
-        echo "$key"
-
         case "$key" in
-        $'\e[A') ((y--)) ;;
-        $'\e[B') ((y++)) ;;
-        $'\e[C') ((x++)) ;;
-        $'\e[D') ((x--)) ;;
+        $'\e[A') requested_dir="up" ;;
+        $'\e[B') requested_dir="down" ;;
+        $'\e[C') requested_dir="right" ;;
+        $'\e[D') requested_dir="left" ;;
         q) break ;;
         esac
-    fi
+    done
+
+    # validate direction change
+    case "$current_dir:$requested_dir" in
+    up:down | down:up | left:right | right:left)
+        ;; # ignore 180 turns
+    *)
+        current_dir="$requested_dir"
+        ;;
+    esac
+
+    case "$current_dir" in
+    up) ((y--)) ;;
+    down) ((y++)) ;;
+    left) ((x--)) ;;
+    right) ((x++)) ;;
+    esac
 
     printf "\e[2J\e[H" # Clear
     printf "\e[%d;%dH@" "$y" "$x"
+    sleep "$frametime"
 done
