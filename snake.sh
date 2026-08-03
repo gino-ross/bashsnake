@@ -14,6 +14,45 @@ cleanup() {
 trap cleanup EXIT
 trap "cleanup; exit 1" SIGINT SIGTERM
 
+poll_input() {
+    local key rest
+    while IFS= read -t 0.001 -rn 1 key; do
+        if [[ $key == $'\e' ]]; then
+            rest=""
+            IFS= read -t 0.001 -rn 2 rest || break
+            key+="$rest"
+        fi
+
+        case "$key" in
+        $'\e[A') requested_dir="up" ;;
+        $'\e[B') requested_dir="down" ;;
+        $'\e[C') requested_dir="right" ;;
+        $'\e[D') requested_dir="left" ;;
+        q) break ;;
+        esac
+    done
+}
+
+update_direction() {
+    # validate direction change
+    case "$current_dir:$requested_dir" in
+    up:down | down:up | left:right | right:left)
+        ;; # ignore 180 turns
+    *)
+        current_dir="$requested_dir"
+        ;;
+    esac
+}
+
+move_snake() {
+    case "$current_dir" in
+    up) ((y--)) ;;
+    down) ((y++)) ;;
+    left) ((x--)) ;;
+    right) ((x++)) ;;
+    esac
+}
+
 game_over=0
 # score=0
 x=10
@@ -28,38 +67,11 @@ clear
 while [ $game_over == 0 ]; do
 
     # input handling
-    key=""
-    while IFS= read -t 0.01 -rn 1 key; do
-        if [[ $key == $'\e' ]]; then
-            rest=""
-            IFS= read -t 0.01 -rn 2 rest
-            key+="$rest"
-        fi
+    poll_input
 
-        case "$key" in
-        $'\e[A') requested_dir="up" ;;
-        $'\e[B') requested_dir="down" ;;
-        $'\e[C') requested_dir="right" ;;
-        $'\e[D') requested_dir="left" ;;
-        q) break ;;
-        esac
-    done
+    update_direction
 
-    # validate direction change
-    case "$current_dir:$requested_dir" in
-    up:down | down:up | left:right | right:left)
-        ;; # ignore 180 turns
-    *)
-        current_dir="$requested_dir"
-        ;;
-    esac
-
-    case "$current_dir" in
-    up) ((y--)) ;;
-    down) ((y++)) ;;
-    left) ((x--)) ;;
-    right) ((x++)) ;;
-    esac
+    move_snake
 
     printf "\e[2J\e[H" # Clear
     printf "\e[%d;%dH@" "$y" "$x"
