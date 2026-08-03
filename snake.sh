@@ -113,18 +113,34 @@ draw_snake() {
 
 # border drawing function (unused at the moment)
 draw_border() {
-    local width=40
-    local height=20
+    local termwidth
+    termwidth=$(tput cols)
+    local termheight
+    termheight=$(tput lines)
+
+    local padding=2
+
+    local width=$((termwidth - padding * 2))
+    local height=$((termheight - padding * 2))
+
+    # account for zero-indexing to create a uniform border
+    ((padding += 1))
+
+    # compute borders (also used in later collision checking)
+    left_column_index=$padding
+    right_column_index=$((padding + height))
+
+    top_row_index=$padding
+    bottom_row_index=$((padding + width))
 
     # top and bottom borders
-    for ((x = 1; x <= width; x++)); do
-        printf "\e[1;%dH\u2588" "$x"
-        printf "\e[%d;%dH\u2588" "$height" "$x"
+    for ((x = padding; x <= width + padding; x++)); do
+        printf "\e[%d;%dH\u2588" "$left_column_index" "$x"
+        printf "\e[%d;%dH\u2588" "$right_column_index" "$x"
     done
-
-    for ((y = 1; y <= height; y++)); do
-        printf "\e[%d;1H\u2588" "$y"
-        printf "\e[%d;%dH\u2588" "$y" "$width"
+    for ((y = padding; y <= height + padding; y++)); do
+        printf "\e[%d;%dH\u2588" "$y" "$top_row_index"
+        printf "\e[%d;%dH\u2588" "$y" "$bottom_row_index"
     done
 
 }
@@ -147,7 +163,7 @@ next_tick=$now
 
 printf "\e[?25l" # Hide cursor
 clear
-# draw_border
+draw_border
 
 while [ $game_over == 0 ]; do
     now=$(date +%s%N)
@@ -181,4 +197,4 @@ while [ $game_over == 0 ]; do
 done
 
 sleep 1
-printf "\n\n\n\n\ryou suck\n"
+printf "\n\n\n\n\ryou suck"
