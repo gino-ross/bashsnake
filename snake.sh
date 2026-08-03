@@ -85,32 +85,6 @@ move_snake() {
     esac
 }
 
-# draw head, segments and clear old cells
-draw_snake() {
-    # unique icon for head
-    head=${snake[0]}
-    IFS=, read -r y x <<<"$head"
-    printf "\e[%d;%dH\u25A1" "$y" "$x"
-
-    for segment in "${snake[@]:1}"; do
-        # check collisions
-        if [[ $segment == "$head" ]]; then
-            IFS=, read -r y x <<<"$segment"
-            printf "\e[%d;%dHX" "$y" "$x"
-            game_over=1
-            break
-        fi
-        IFS=, read -r y x <<<"$segment"
-        printf "\e[%d;%dH\u25A0" "$y" "$x"
-    done
-
-    # clear last removed cell (won't run if fruit picked up)
-    IFS=, read -r y x <<<"$old_cell"
-    if [ "$old_cell" ]; then
-        printf "\e[%d;%dH " "$y" "$x"
-    fi
-}
-
 # border drawing function (unused at the moment)
 draw_border() {
     local termwidth
@@ -127,22 +101,57 @@ draw_border() {
     ((padding += 1))
 
     # compute borders (also used in later collision checking)
-    left_column_index=$padding
-    right_column_index=$((padding + height))
-
     top_row_index=$padding
-    bottom_row_index=$((padding + width))
+    bottom_row_index=$((padding + height))
+
+    left_column_index=$padding
+    right_column_index=$((padding + width))
 
     # top and bottom borders
     for ((x = padding; x <= width + padding; x++)); do
-        printf "\e[%d;%dH\u2588" "$left_column_index" "$x"
-        printf "\e[%d;%dH\u2588" "$right_column_index" "$x"
+        printf "\e[%d;%dH\u2588" "$top_row_index" "$x"
+        printf "\e[%d;%dH\u2588" "$bottom_row_index" "$x"
     done
     for ((y = padding; y <= height + padding; y++)); do
-        printf "\e[%d;%dH\u2588" "$y" "$top_row_index"
-        printf "\e[%d;%dH\u2588" "$y" "$bottom_row_index"
+        printf "\e[%d;%dH\u2588" "$y" "$left_column_index"
+        printf "\e[%d;%dH\u2588" "$y" "$right_column_index"
     done
 
+}
+
+kill_snake() {
+
+    printf "\e[%d;%dHX" "$head_y" "$head_x" # show head as x if collision
+    game_over=1
+    return
+}
+
+# draw head, segments and clear old cells
+draw_snake() {
+    # unique icon for head
+    head=${snake[0]}
+    IFS=, read -r head_y head_x <<<"$head"
+    printf "\e[%d;%dH\u25A1" "$head_y" "$head_x"
+
+    if [ "$head_x" == "$left_column_index" ] || [ "$head_x" == "$right_column_index" ] || [ "$head_y" == "$top_row_index" ] || [ "$head_y" == "$bottom_row_index" ]; then
+        kill_snake
+    fi
+
+    for segment in "${snake[@]:1}"; do
+        # check collisions
+        if [[ $segment == "$head" ]]; then
+            kill_snake
+            break
+        fi
+        IFS=, read -r y x <<<"$segment"
+        printf "\e[%d;%dH\u25A0" "$y" "$x"
+    done
+
+    # clear last removed cell (won't run if fruit picked up)
+    IFS=, read -r y x <<<"$old_cell"
+    if [ "$old_cell" ]; then
+        printf "\e[%d;%dH " "$y" "$x"
+    fi
 }
 
 # main game logic
