@@ -88,10 +88,18 @@ move_snake() {
 # draw head, segments and clear old cells
 draw_snake() {
     # unique icon for head
-    IFS=, read -r y x <<<"${snake[0]}"
+    head=${snake[0]}
+    IFS=, read -r y x <<<"$head"
     printf "\e[%d;%dH\u25A1" "$y" "$x"
 
     for segment in "${snake[@]:1}"; do
+        # check collisions
+        if [[ $segment == "$head" ]]; then
+            IFS=, read -r y x <<<"$segment"
+            printf "\e[%d;%dHX" "$y" "$x"
+            game_over=1
+            break
+        fi
         IFS=, read -r y x <<<"$segment"
         printf "\e[%d;%dH\u25A0" "$y" "$x"
     done
@@ -124,7 +132,7 @@ draw_border() {
 # main game logic
 game_over=0
 # score=0
-snake=("10,10" "10,9")
+snake=("10,10" "10,9" "10,8" "10,7" "10,6" "10,5" "10,4")
 
 # Dir queue to allow input buffering
 dir_queue=()
@@ -171,3 +179,6 @@ while [ $game_over == 0 ]; do
         sleep "$(awk -v n="$sleep_time_ns" 'BEGIN {printf "%.6f", n/1000000000}')"
     fi
 done
+
+sleep 1
+printf "\n\n\n\n\ryou suck\n"
