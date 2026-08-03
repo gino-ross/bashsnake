@@ -14,6 +14,7 @@ cleanup() {
 trap cleanup EXIT
 trap "cleanup; exit 1" SIGINT SIGTERM
 
+# utility function for movement logic
 is_opposite() {
     case "$1:$2" in
     up:down | down:up | left:right | right:left) return 0 ;;
@@ -21,6 +22,7 @@ is_opposite() {
     return 1
 }
 
+# reads arrow key input and adds requested directions to queue
 poll_input() {
     local key rest dir ref
     while IFS= read -t 0.001 -rn 1 key; do
@@ -52,12 +54,14 @@ poll_input() {
     done
 }
 
+# utility function for updating snake array
 update_snake_array() {
     snake=("$(printf "%d,%d" "$head_y" "$head_x")" "${snake[@]}")
     old_cell=${snake[-1]}
     unset 'snake[-1]'
 }
 
+# update snake array according to movement
 move_snake() {
     IFS=, read -r head_y head_x <<<"${snake[0]}"
 
@@ -81,6 +85,7 @@ move_snake() {
     esac
 }
 
+# draw head, segments and clear old cells
 draw_snake() {
     # unique icon for head
     IFS=, read -r y x <<<"${snake[0]}"
@@ -98,6 +103,7 @@ draw_snake() {
     fi
 }
 
+# border drawing function (unused at the moment)
 draw_border() {
     local width=40
     local height=20
