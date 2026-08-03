@@ -54,6 +54,7 @@ poll_input() {
 
 update_snake_array() {
     snake=("$(printf "%d,%d" "$head_y" "$head_x")" "${snake[@]}")
+    old_cell=${snake[-1]}
     unset 'snake[-1]'
 }
 
@@ -81,8 +82,20 @@ move_snake() {
 }
 
 draw_snake() {
+    # unique icon for head
     IFS=, read -r y x <<<"${snake[0]}"
     printf "\e[%d;%dH\u25A1" "$y" "$x"
+
+    for segment in "${snake[@]:1}"; do
+        IFS=, read -r y x <<<"$segment"
+        printf "\e[%d;%dH\u25A0" "$y" "$x"
+    done
+
+    # clear last removed cell (won't run if fruit picked up)
+    IFS=, read -r y x <<<"$old_cell"
+    if [ "$old_cell" ]; then
+        printf "\e[%d;%dH " "$y" "$x"
+    fi
 }
 
 draw_border() {
@@ -105,7 +118,7 @@ draw_border() {
 # main game logic
 game_over=0
 # score=0
-snake=("10,10" "10, 9")
+snake=("10,10" "10,9")
 
 # Dir queue to allow input buffering
 dir_queue=()
