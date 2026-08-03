@@ -66,27 +66,15 @@ move_snake() {
     IFS=, read -r head_y head_x <<<"${snake[0]}"
 
     case "$current_dir" in
-    up)
-        ((head_y--))
-        update_snake_array
-        ;;
-    down)
-        ((head_y++))
-        update_snake_array
-        ;;
-    left)
-        ((head_x--))
-        update_snake_array
-        ;;
-    right)
-        ((head_x++))
-        update_snake_array
-        ;;
+    up) ((head_y--)) ;;
+    down) ((head_y++)) ;;
+    left) ((head_x--)) ;;
+    right) ((head_x++)) ;;
     esac
+    update_snake_array
 }
 
-# border drawing function (unused at the moment)
-draw_border() {
+compute_bounds() {
     local termwidth
     termwidth=$(tput cols)
     local termheight
@@ -100,49 +88,62 @@ draw_border() {
     # account for zero-indexing to create a uniform border
     ((padding += 1))
 
-    # compute borders (also used in later collision checking)
     top_row_index=$padding
     bottom_row_index=$((padding + height))
 
     left_column_index=$padding
     right_column_index=$((padding + width))
+}
 
+draw_border() {
     # top and bottom borders
-    for ((x = padding; x <= width + padding; x++)); do
+    for ((x = left_column_index; x <= right_column_index; x++)); do
         printf "\e[%d;%dH\u2588" "$top_row_index" "$x"
         printf "\e[%d;%dH\u2588" "$bottom_row_index" "$x"
     done
-    for ((y = padding; y <= height + padding; y++)); do
+    # left and right borders
+    for ((y = top_row_index; y <= bottom_row_index; y++)); do
         printf "\e[%d;%dH\u2588" "$y" "$left_column_index"
         printf "\e[%d;%dH\u2588" "$y" "$right_column_index"
     done
-
 }
 
 kill_snake() {
-
-    printf "\e[%d;%dHX" "$head_y" "$head_x" # show head as x if collision
+    printf "\e[%d;%dHX" "$1" "$2" # show head as X on collision
     game_over=1
-    return
+}
+
+hit_wall() {
+    [[ $1 == "$left_column_index" || $1 == "$right_column_index" || $2 == "$top_row_index" || $2 == "$bottom_row_index" ]]
+}
+
+# returns 0 if no collision, 1 (game over) on wall or self collision
+check_collisions() {
+    local head=$1 head_y head_x
+    IFS=, read -r head_y head_x <<<"$head"
+
+    if hit_wall "$head_x" "$head_y"; then
+        kill_snake "$head_y" "$head_x"
+        return 1
+    fi
+
+    for segment in "${snake[@]:1}"; do
+        if [[ $segment == "$head" ]]; then
+            kill_snake "$head_y" "$head_x"
+            return 1
+        fi
+    done
+    return 0
 }
 
 # draw head, segments and clear old cells
 draw_snake() {
-    # unique icon for head
+    local head head_y head_x y x
     head=${snake[0]}
     IFS=, read -r head_y head_x <<<"$head"
     printf "\e[%d;%dH\u25A1" "$head_y" "$head_x"
 
-    if [ "$head_x" == "$left_column_index" ] || [ "$head_x" == "$right_column_index" ] || [ "$head_y" == "$top_row_index" ] || [ "$head_y" == "$bottom_row_index" ]; then
-        kill_snake
-    fi
-
     for segment in "${snake[@]:1}"; do
-        # check collisions
-        if [[ $segment == "$head" ]]; then
-            kill_snake
-            break
-        fi
         IFS=, read -r y x <<<"$segment"
         printf "\e[%d;%dH\u25A0" "$y" "$x"
     done
@@ -172,6 +173,7 @@ next_tick=$now
 
 printf "\e[?25l" # Hide cursor
 clear
+compute_bounds
 draw_border
 
 while [ $game_over == 0 ]; do
@@ -189,7 +191,11 @@ while [ $game_over == 0 ]; do
 
         move_snake
 
-        draw_snake
+        if check_collisions "${snake[0]}"; then
+            draw_snake
+        else
+            break
+        fi
 
         next_tick=$((next_tick + tick_dt))
     done
