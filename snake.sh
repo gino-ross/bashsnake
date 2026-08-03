@@ -14,8 +14,15 @@ cleanup() {
 trap cleanup EXIT
 trap "cleanup; exit 1" SIGINT SIGTERM
 
+is_opposite() {
+    case "$1:$2" in
+    up:down | down:up | left:right | right:left) return 0 ;;
+    esac
+    return 1
+}
+
 poll_input() {
-    local key rest
+    local key rest dir ref
     while IFS= read -t 0.001 -rn 1 key; do
         if [[ $key == $'\e' ]]; then
             rest=""
@@ -24,24 +31,25 @@ poll_input() {
         fi
 
         case "$key" in
-        $'\e[A') requested_dir="up" ;;
-        $'\e[B') requested_dir="down" ;;
-        $'\e[C') requested_dir="right" ;;
-        $'\e[D') requested_dir="left" ;;
+        $'\e[A') dir="up" ;;
+        $'\e[B') dir="down" ;;
+        $'\e[C') dir="right" ;;
+        $'\e[D') dir="left" ;;
         q) break ;;
+        *) continue ;;
         esac
-    done
-}
 
-update_direction() {
-    # validate direction change
-    case "$current_dir:$requested_dir" in
-    up:down | down:up | left:right | right:left)
-        ;; # ignore 180 turns
-    *)
-        current_dir="$requested_dir"
-        ;;
-    esac
+        # process new direction inputs with priority on buffered dirchanges
+        # fixes instant 180 turns caused by higher rate input polling
+        if ((${#dir_queue[@]} > 0)); then
+            ref="${dir_queue[-1]}"
+        else
+            ref="$current_dir"
+        fi
+        if ! is_opposite "$ref" "$dir"; then
+            dir_queue+=("$dir")
+        fi
+    done
 }
 
 move_snake() {
@@ -53,13 +61,22 @@ move_snake() {
     esac
 }
 
+# main game logic
 game_over=0
 # score=0
 x=10
 y=10
-requested_dir="right"
+
+# Dir queue to allow input buffering
+dir_queue=()
 current_dir="right"
-frametime=0.1
+
+render_dt=16666667 # ~60fps, in nanoseconds
+move_dt=100000000  # 0.1s, in nanoseconds
+
+now=$(date +%s%N)
+next_render=$now
+next_move=$now
 
 printf "\e[?25l" # Hide cursor
 clear
@@ -69,11 +86,28 @@ while [ $game_over == 0 ]; do
     # input handling
     poll_input
 
-    update_direction
+    now=$(date +%s%N)
 
-    move_snake
+    # movement tick
+    if ((now >= next_move)); then
+        if ((${#dir_queue[@]} > 0)); then
+            current_dir="${dir_queue[0]}"
+            dir_queue=("${dir_queue[@]:1}")
+        fi
+        move_snake
+        next_move=$((next_move + move_dt))
+    fi
 
-    printf "\e[2J\e[H" # Clear
-    printf "\e[%d;%dH@" "$y" "$x"
-    sleep "$frametime"
+    # render tick
+    if ((now >= next_render)); then
+        printf "\e[2J\e[H" # Clear
+        printf "\e[%d;%dH@" "$y" "$x"
+        next_render=$((next_render + render_dt))
+    fi
+
+    # sleep until the next render deadline
+    sleep_time_ns=$((next_render - now))
+    if ((sleep_time_ns > 0)); then
+        sleep "$(awk -v n="$sleep_time_ns" 'BEGIN {printf "%.6f", n/1000000000}')"
+    fi
 done
