@@ -52,61 +52,102 @@ poll_input() {
     done
 }
 
+update_snake_array() {
+    snake=("$(printf "%d,%d" "$head_y" "$head_x")" "${snake[@]}")
+    unset 'snake[-1]'
+}
+
 move_snake() {
+    IFS=, read -r head_y head_x <<<"${snake[0]}"
+
     case "$current_dir" in
-    up) ((y--)) ;;
-    down) ((y++)) ;;
-    left) ((x--)) ;;
-    right) ((x++)) ;;
+    up)
+        ((head_y--))
+        update_snake_array
+        ;;
+    down)
+        ((head_y++))
+        update_snake_array
+        ;;
+    left)
+        ((head_x--))
+        update_snake_array
+        ;;
+    right)
+        ((head_x++))
+        update_snake_array
+        ;;
     esac
+}
+
+draw_snake() {
+    IFS=, read -r y x <<<"${snake[0]}"
+    printf "\e[%d;%dH\u25A1" "$y" "$x"
+}
+
+draw_border() {
+    local width=40
+    local height=20
+
+    # top and bottom borders
+    for ((x = 1; x <= width; x++)); do
+        printf "\e[1;%dH\u2588" "$x"
+        printf "\e[%d;%dH\u2588" "$height" "$x"
+    done
+
+    for ((y = 1; y <= height; y++)); do
+        printf "\e[%d;1H\u2588" "$y"
+        printf "\e[%d;%dH\u2588" "$y" "$width"
+    done
+
 }
 
 # main game logic
 game_over=0
 # score=0
-x=10
-y=10
+snake=("10,10" "10, 9")
 
 # Dir queue to allow input buffering
 dir_queue=()
 current_dir="right"
 
-render_dt=16666667 # ~60fps, in nanoseconds
-move_dt=100000000  # 0.1s, in nanoseconds
+poll_dt=16666667  # ~60fps, in nanoseconds
+tick_dt=100000000 # 0.1s, in nanoseconds
 
 now=$(date +%s%N)
-next_render=$now
-next_move=$now
+next_poll=$now
+next_tick=$now
 
 printf "\e[?25l" # Hide cursor
 clear
+# draw_border
 
 while [ $game_over == 0 ]; do
+    now=$(date +%s%N)
 
     # input handling
     poll_input
 
-    now=$(date +%s%N)
-
-    # movement tick
-    if ((now >= next_move)); then
+    # movement and render tick
+    while ((now >= next_tick)); do
         if ((${#dir_queue[@]} > 0)); then
             current_dir="${dir_queue[0]}"
             dir_queue=("${dir_queue[@]:1}")
         fi
+
         move_snake
-        next_move=$((next_move + move_dt))
-    fi
 
-    # render tick
-    if ((now >= next_render)); then
-        printf "\e[2J\e[H" # Clear
-        printf "\e[%d;%dH@" "$y" "$x"
-        next_render=$((next_render + render_dt))
-    fi
+        draw_snake
 
-    # sleep until the next render deadline
-    sleep_time_ns=$((next_render - now))
+        next_tick=$((next_tick + tick_dt))
+    done
+
+    next_poll=$((next_poll + poll_dt))
+
+    # calculate time to sleep before next poll
+    now=$(date +%s%N)
+    sleep_time_ns=$((next_poll - now))
+
     if ((sleep_time_ns > 0)); then
         sleep "$(awk -v n="$sleep_time_ns" 'BEGIN {printf "%.6f", n/1000000000}')"
     fi
