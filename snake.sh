@@ -56,9 +56,14 @@ poll_input() {
 
 # utility function for updating snake array
 update_snake_array() {
+    local grow=$1
     snake=("$(printf "%d,%d" "$head_y" "$head_x")" "${snake[@]}")
-    old_cell=${snake[-1]}
-    unset 'snake[-1]'
+    if [ "$grow" == 1 ]; then
+        old_cell="" # keep tail, clear old_cell so draw_snake erases nothing
+    else
+        old_cell=${snake[-1]}
+        unset 'snake[-1]'
+    fi
 }
 
 # update snake array according to movement
@@ -71,7 +76,14 @@ move_snake() {
     left) ((head_x--)) ;;
     right) ((head_x++)) ;;
     esac
-    update_snake_array
+
+    local grow=0
+    if [[ "$head_y,$head_x" == "$fruit_pos" ]]; then
+        grow=1
+        ((++score))
+        spawn_fruit
+    fi
+    update_snake_array "$grow"
 }
 
 compute_bounds() {
@@ -117,6 +129,21 @@ hit_wall() {
     [[ $1 == "$left_column_index" || $1 == "$right_column_index" || $2 == "$top_row_index" || $2 == "$bottom_row_index" ]]
 }
 
+# pick a random free cell inside the play area for the fruit
+spawn_fruit() {
+    local y x
+    while :; do
+        y=$((RANDOM % (bottom_row_index - top_row_index - 1) + top_row_index + 1))
+        x=$((RANDOM % (right_column_index - left_column_index - 1) + left_column_index + 1))
+        for segment in "${snake[@]}"; do
+            [[ "$y,$x" == "$segment" ]] && continue 2
+        done
+        break
+    done
+    fruit_pos="$y,$x"
+    printf "\e[%d;%dH\u25C6" "$y" "$x"
+}
+
 # returns 0 if no collision, 1 (game over) on wall or self collision
 check_collisions() {
     local head=$1 head_y head_x
@@ -157,12 +184,13 @@ draw_snake() {
 
 # main game logic
 game_over=0
-# score=0
-snake=("10,10" "10,9" "10,8" "10,7" "10,6" "10,5" "10,4")
+score=0
+snake=("10,10" "10,9" "10,8" "10,7" "10,6" "10,5")
 
 # Dir queue to allow input buffering
 dir_queue=()
 current_dir="right"
+fruit_pos="0,0"
 
 poll_dt=16666667  # ~60fps, in nanoseconds
 tick_dt=100000000 # 0.1s, in nanoseconds
@@ -175,6 +203,7 @@ printf "\e[?25l" # Hide cursor
 clear
 compute_bounds
 draw_border
+spawn_fruit
 
 while [ $game_over == 0 ]; do
     now=$(date +%s%N)
