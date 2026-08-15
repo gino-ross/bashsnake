@@ -182,63 +182,95 @@ draw_snake() {
     fi
 }
 
-# main game logic
-game_over=0
-score=0
-snake=("10,10" "10,9" "10,8" "10,7" "10,6" "10,5")
+# reset game state and redraw initial frame
+reset_game() {
+    game_over=0
+    score=0
+    snake=("10,10" "10,9" "10,8" "10,7" "10,6" "10,5")
 
-# Dir queue to allow input buffering
-dir_queue=()
-current_dir="right"
-fruit_pos="0,0"
+    # Dir queue to allow input buffering
+    dir_queue=()
+    current_dir="right"
+    fruit_pos="0,0"
+
+    now=$(date +%s%N)
+    next_poll=$now
+    next_tick=$now
+
+    clear
+    compute_bounds
+    draw_border
+    spawn_fruit
+}
+
+# draw centered game over text over the frozen board
+draw_end_screen() {
+    local center_y gameover_x note_x
+    center_y=$(((top_row_index + bottom_row_index) / 2))
+    gameover_x=$(((left_column_index + right_column_index) / 2 - 4))
+    note_x=$(((left_column_index + right_column_index) / 2 - 15))
+    printf "\e[%d;%dHGame over" "$center_y" "$gameover_x"
+    printf "\e[%d;%dHPress 'r' to restart or 'q' to quit" "$((center_y + 1))" "$note_x"
+}
+
+# wait for a key on the end screen: r to restart, q/ESC to quit
+wait_for_restart() {
+    local key
+    while :; do
+        IFS= read -rn 1 key
+        case "$key" in
+        r | R) return 0 ;;
+        q | Q | $'\e') return 1 ;;
+        esac
+    done
+}
 
 poll_dt=16666667  # ~60fps, in nanoseconds
 tick_dt=100000000 # 0.1s, in nanoseconds
 
-now=$(date +%s%N)
-next_poll=$now
-next_tick=$now
-
 printf "\e[?25l" # Hide cursor
-clear
-compute_bounds
-draw_border
-spawn_fruit
 
-while [ $game_over == 0 ]; do
-    now=$(date +%s%N)
+while :; do
+    reset_game
 
-    # input handling
-    poll_input
+    while [ $game_over == 0 ]; do
+        now=$(date +%s%N)
 
-    # movement and render tick
-    while ((now >= next_tick)); do
-        if ((${#dir_queue[@]} > 0)); then
-            current_dir="${dir_queue[0]}"
-            dir_queue=("${dir_queue[@]:1}")
+        # input handling
+        poll_input
+
+        # movement and render tick
+        while ((now >= next_tick)); do
+            if ((${#dir_queue[@]} > 0)); then
+                current_dir="${dir_queue[0]}"
+                dir_queue=("${dir_queue[@]:1}")
+            fi
+
+            move_snake
+
+            if check_collisions "${snake[0]}"; then
+                draw_snake
+            else
+                break
+            fi
+
+            next_tick=$((next_tick + tick_dt))
+        done
+
+        next_poll=$((next_poll + poll_dt))
+
+        # calculate time to sleep before next poll
+        now=$(date +%s%N)
+        sleep_time_ns=$((next_poll - now))
+
+        if ((sleep_time_ns > 0)); then
+            sleep "$(awk -v n="$sleep_time_ns" 'BEGIN {printf "%.6f", n/1000000000}')"
         fi
-
-        move_snake
-
-        if check_collisions "${snake[0]}"; then
-            draw_snake
-        else
-            break
-        fi
-
-        next_tick=$((next_tick + tick_dt))
     done
 
-    next_poll=$((next_poll + poll_dt))
+    draw_end_screen
 
-    # calculate time to sleep before next poll
-    now=$(date +%s%N)
-    sleep_time_ns=$((next_poll - now))
-
-    if ((sleep_time_ns > 0)); then
-        sleep "$(awk -v n="$sleep_time_ns" 'BEGIN {printf "%.6f", n/1000000000}')"
+    if ! wait_for_restart; then
+        break
     fi
 done
-
-sleep 1
-printf "\n\n\n\n\ryou suck"
