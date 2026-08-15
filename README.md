@@ -15,12 +15,13 @@ Control the snake with the arrow keys. Eat the fruit to increase your score.
 
 ## Requirements
 
-- Bash 4+ (uses arrays)
-- A terminal with ANSI escape support
-- `tput` (ncurses)
+- Bash 4+
+- A terminal with ANSI escape support (basically any modern terminal)
+- `tput` (part of the ncurses package, available by default on most Unix-like systems)
 
 ## Platform compatibility
 
 - **Linux** — fully supported
-- **macOS / BSD** — not supported (`date +%s%N` is GNU-specific)
-- **Windows** — works under WSL or Git Bash; native CMD/PowerShell not supported
+- **MacOS / BSD** — not supported (`date` syntax is GNU-specific)
+  - May be supported in the future
+- **Windows** — works under WSL or Git Bash, but native CMD/PowerShell not supported
