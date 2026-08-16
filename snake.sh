@@ -14,6 +14,15 @@ cleanup() {
 trap cleanup EXIT
 trap "cleanup; exit 1" SIGINT SIGTERM
 
+# portable nanosecond timestamp (GNU date, fallback to perl for BSD/macOS)
+ns_now() {
+    if date --version >/dev/null 2>&1; then
+        date +%s%N
+    else
+        perl -MTime::HiRes -e 'printf "%.0f", Time::HiRes::time()*1000000000'
+    fi
+}
+
 # utility function for movement logic
 is_opposite() {
     case "$1:$2" in
@@ -21,6 +30,12 @@ is_opposite() {
     esac
     return 1
 }
+
+# UTF-8 glyphs as hex escapes for bash 3.2 compatibility (no \u in printf)
+glyph_block=$'\xE2\x96\x88' # █ U+2588
+glyph_head=$'\xE2\x96\xA1'  # □ U+25A1
+glyph_body=$'\xE2\x96\xA0'  # ■ U+25A0
+glyph_fruit=$'\xE2\x97\x86' # ◆ U+25C6
 
 # reads arrow key input and adds requested directions to queue
 poll_input() {
@@ -44,7 +59,7 @@ poll_input() {
         # process new direction inputs with priority on buffered dirchanges
         # fixes instant 180 turns caused by higher rate input polling
         if ((${#dir_queue[@]} > 0)); then
-            ref="${dir_queue[-1]}"
+            ref="${dir_queue[${#dir_queue[@]} - 1]}"
         else
             ref="$current_dir"
         fi
@@ -61,8 +76,9 @@ update_snake_array() {
     if [ "$grow" == 1 ]; then
         old_cell="" # keep tail, clear old_cell so draw_snake erases nothing
     else
-        old_cell=${snake[-1]}
-        unset 'snake[-1]'
+        local last=$((${#snake[@]} - 1))
+        old_cell=${snake[$last]}
+        unset "snake[$last]"
     fi
 }
 
@@ -110,13 +126,13 @@ compute_bounds() {
 draw_border() {
     # top and bottom borders
     for ((x = left_column_index; x <= right_column_index; x++)); do
-        printf "\e[%d;%dH\u2588" "$top_row_index" "$x"
-        printf "\e[%d;%dH\u2588" "$bottom_row_index" "$x"
+        printf "\e[%d;%dH%s" "$top_row_index" "$x" "$glyph_block"
+        printf "\e[%d;%dH%s" "$bottom_row_index" "$x" "$glyph_block"
     done
     # left and right borders
     for ((y = top_row_index; y <= bottom_row_index; y++)); do
-        printf "\e[%d;%dH\u2588" "$y" "$left_column_index"
-        printf "\e[%d;%dH\u2588" "$y" "$right_column_index"
+        printf "\e[%d;%dH%s" "$y" "$left_column_index" "$glyph_block"
+        printf "\e[%d;%dH%s" "$y" "$right_column_index" "$glyph_block"
     done
 }
 
@@ -141,7 +157,7 @@ spawn_fruit() {
         break
     done
     fruit_pos="$y,$x"
-    printf "\e[%d;%dH\u25C6" "$y" "$x"
+    printf "\e[%d;%dH%s" "$y" "$x" "$glyph_fruit"
 }
 
 # returns 0 if no collision, 1 (game over) on wall or self collision
@@ -168,11 +184,11 @@ draw_snake() {
     local head head_y head_x y x
     head=${snake[0]}
     IFS=, read -r head_y head_x <<<"$head"
-    printf "\e[%d;%dH\u25A1" "$head_y" "$head_x"
+    printf "\e[%d;%dH%s" "$head_y" "$head_x" "$glyph_head"
 
     for segment in "${snake[@]:1}"; do
         IFS=, read -r y x <<<"$segment"
-        printf "\e[%d;%dH\u25A0" "$y" "$x"
+        printf "\e[%d;%dH%s" "$y" "$x" "$glyph_body"
     done
 
     # clear last removed cell (won't run if fruit picked up)
@@ -193,7 +209,7 @@ reset_game() {
     current_dir="right"
     fruit_pos="0,0"
 
-    now=$(date +%s%N)
+    now=$(ns_now)
     next_poll=$now
     next_tick=$now
 
@@ -236,7 +252,7 @@ while :; do
     reset_game
 
     while [ $game_over == 0 ]; do
-        now=$(date +%s%N)
+        now=$(ns_now)
 
         # input handling
         poll_input
@@ -262,7 +278,7 @@ while :; do
         next_poll=$((next_poll + poll_dt))
 
         # calculate time to sleep before next poll
-        now=$(date +%s%N)
+        now=$(ns_now)
         sleep_time_ns=$((next_poll - now))
 
         if ((sleep_time_ns > 0)); then
