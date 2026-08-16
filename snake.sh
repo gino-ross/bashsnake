@@ -208,9 +208,11 @@ draw_end_screen() {
     local center_y gameover_x note_x
     center_y=$(((top_row_index + bottom_row_index) / 2))
     gameover_x=$(((left_column_index + right_column_index) / 2 - 4))
+    score_x=$(((left_column_index + right_column_index) / 2 - 4))
     note_x=$(((left_column_index + right_column_index) / 2 - 15))
     printf "\e[%d;%dHGame over" "$center_y" "$gameover_x"
-    printf "\e[%d;%dHPress 'r' to restart or 'q' to quit" "$((center_y + 1))" "$note_x"
+    printf "\e[%d;%dHScore: %d" "$((center_y + 1))" "$score_x" "$score"
+    printf "\e[%d;%dHPress 'r' to restart or 'q' to quit" "$((center_y + 2))" "$note_x"
 }
 
 # wait for a key on the end screen: r to restart, q/ESC to quit
